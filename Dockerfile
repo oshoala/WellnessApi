@@ -2,11 +2,11 @@
 FROM mcr.microsoft.com/dotnet/sdk:5.0 AS build
 WORKDIR /app
 
-# Copy solution file (if you have one)
+# Copy solution file
 COPY *.sln ./
 
 # Copy project file
-COPY WellnessApis/WellnessApis.csproj ./WellnessApis/
+COPY *.csproj ./
 
 # Restore dependencies
 RUN dotnet restore
@@ -15,8 +15,7 @@ RUN dotnet restore
 COPY . ./
 
 # Build and publish
-WORKDIR /app/WellnessApis
-RUN dotnet publish -c Release -o /app/out
+RUN dotnet publish -c Release -o out
 
 # Use the runtime image for the final image
 FROM mcr.microsoft.com/dotnet/aspnet:5.0
