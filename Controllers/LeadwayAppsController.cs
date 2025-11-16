@@ -19,6 +19,7 @@ namespace WellnessApis.Controllers
         }
 
         [HttpGet("GetPAIssuedEnrollee")]
+        //    [ApiKeyAuth] 
         public async Task<IActionResult> GetPAIssuedEnrollee(
             [FromQuery] string fromDate,
             [FromQuery] string toDate,
