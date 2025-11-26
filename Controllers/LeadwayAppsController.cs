@@ -1,6 +1,8 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 
 namespace WellnessApis.Controllers
@@ -19,49 +21,78 @@ namespace WellnessApis.Controllers
         }
 
         [HttpGet("GetPAIssuedEnrollee")]
-        //    [ApiKeyAuth] 
         public async Task<IActionResult> GetPAIssuedEnrollee(
-            [FromQuery] string fromDate,
-            [FromQuery] string toDate,
-            [FromQuery] string cifno = "",
-            [FromQuery] string paStatus = "",
-            [FromQuery] string visitid = "")
+        [FromQuery] string fromDate,
+        [FromQuery] string toDate,
+        [FromQuery] string cifno = "",
+        [FromQuery] string paStatus = "",
+        [FromQuery] string visitid = "",
+        [FromQuery] string benefitid = "",
+        [FromQuery] int pageNumber = 1,
+        [FromQuery] int pageSize = 10)
         {
             if (string.IsNullOrEmpty(fromDate) || string.IsNullOrEmpty(toDate))
             {
-                return BadRequest("fromDate and toDate parameters are required.");
+                return BadRequest(new { error = "fromDate and toDate parameters are required." });
             }
 
-            // Validate date format
             if (!DateTime.TryParseExact(fromDate, "yyyyMMdd", null, System.Globalization.DateTimeStyles.None, out DateTime dtFromDate) ||
                 !DateTime.TryParseExact(toDate, "yyyyMMdd", null, System.Globalization.DateTimeStyles.None, out DateTime dtToDate))
             {
-                return BadRequest("Invalid date format. Use yyyyMMdd format.");
+                return BadRequest(new { error = "Invalid date format. Use yyyyMMdd format." });
             }
 
             try
             {
-                // Option 1: Using dynamic list (recommended)
-                var sql = $@"exec Api_spGet_PAIssued_Enrollee '{dtFromDate:yyyyMMdd}', '{dtToDate:yyyyMMdd}','{cifno}','{paStatus}','{visitid}'";
+                _logger.LogInformation($"Executing GetPAIssuedEnrollee: {dtFromDate:yyyyMMdd} to {dtToDate:yyyyMMdd}, Page {pageNumber}, Size {pageSize}");
+
+                var sql = $@"exec Api_spGet_PAIssued_Enrollee '{dtFromDate:yyyyMMdd}', '{dtToDate:yyyyMMdd}','{cifno}','{paStatus}','{visitid}','{benefitid}',{pageNumber},{pageSize}";
+
                 var result = await _dbContext.ExecuteStoredProcedureDynamic(sql);
 
-                // Option 2: Using parameters (safer - prevents SQL injection)
-                // var parameters = new[]
-                // {
-                //     new SqlParameter("@FromDate", dtFromDate.ToString("yyyyMMdd")),
-                //     new SqlParameter("@ToDate", dtToDate.ToString("yyyyMMdd")),
-                //     new SqlParameter("@CifNo", cifno ?? ""),
-                //     new SqlParameter("@PAStatus", paStatus ?? ""),
-                //     new SqlParameter("@VisitId", visitid ?? "")
-                // };
-                // var result = await _dbContext.ExecuteStoredProcedureWithParams("Api_spGet_PAIssued_Enrollee", parameters);
+                _logger.LogInformation($"Query executed successfully. Returned {result?.Count ?? 0} rows");
 
-                return Ok(result);
+                return Ok(new
+                {
+                    data = result,
+                    count = result?.Count ?? 0,
+                    pageNumber = pageNumber,
+                    pageSize = pageSize
+                });
+            }
+            catch (System.Data.SqlClient.SqlException ex) when (ex.Message.Contains("Timeout"))
+            {
+                _logger.LogError(ex, "Database timeout occurred");
+                return StatusCode(504, new { error = "Database timeout", message = "Query took too long to execute. Try reducing the date range or page size." });
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "An error occurred in GetPAIssuedEnrollee: {Message}", ex.Message);
-                return StatusCode(500, $"Internal server error: {ex.Message}");
+                return StatusCode(500, new { error = "Internal server error", message = ex.Message });
+            }
+        }
+        [HttpGet("GetAllDepartments")]
+        public async Task<IActionResult> GetAllDepartments()
+        {
+            try
+            {
+                _logger.LogInformation("GetAllDepartments endpoint called");
+
+                var sql = "EXEC dbo.apiget_discipline";
+                var result = await _dbContext.ExecuteStoredProcedureDynamic(sql);
+
+                if (result == null || !result.Any())
+                {
+                    _logger.LogWarning("No departments found");
+                    return Ok(new { result = new List<object>(), message = "No departments found" });
+                }
+
+                return Ok(new { result = result });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "An error occurred in GetAllDepartments: {Message}", ex.Message);
+                return StatusCode(500, new { error = "Internal server error", message = ex.Message });
             }
         }
 

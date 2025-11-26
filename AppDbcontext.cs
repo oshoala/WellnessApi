@@ -11,43 +11,71 @@ namespace WellnessApis
         public AppDbContext(DbContextOptions<AppDbContext> options)
             : base(options)
         {
+            Database.SetCommandTimeout(180);
         }
 
         // Add your DbSets here
         // public DbSet<YourEntity> YourEntities { get; set; }
 
         // Method to execute stored procedure and return dynamic list
+        /*  public async Task<List<dynamic>> ExecuteStoredProcedureDynamic(string sql)
+          {
+              var result = new List<dynamic>();
+
+              using (var connection = Database.GetDbConnection())
+              {
+                  await connection.OpenAsync();
+
+                  using (var command = connection.CreateCommand())
+                  {
+                      command.CommandText = sql;
+                      command.CommandType = CommandType.Text;
+
+                      using (var reader = await command.ExecuteReaderAsync())
+                      {
+                          while (await reader.ReadAsync())
+                          {
+                              var expandoObject = new ExpandoObject() as IDictionary<string, object>;
+
+                              for (int i = 0; i < reader.FieldCount; i++)
+                              {
+                                  expandoObject.Add(reader.GetName(i), reader.GetValue(i));
+                              }
+
+                              result.Add(expandoObject);
+                          }
+                      }
+                  }
+              }
+
+              return result;
+          }
+  */
         public async Task<List<dynamic>> ExecuteStoredProcedureDynamic(string sql)
         {
-            var result = new List<dynamic>();
-
-            using (var connection = Database.GetDbConnection())
+            using (var command = Database.GetDbConnection().CreateCommand())
             {
-                await connection.OpenAsync();
+                command.CommandText = sql;
+                command.CommandType = CommandType.Text;
+                command.CommandTimeout = 180; // 3 minutes
 
-                using (var command = connection.CreateCommand())
+                await Database.OpenConnectionAsync();
+
+                using (var result = await command.ExecuteReaderAsync())
                 {
-                    command.CommandText = sql;
-                    command.CommandType = CommandType.Text;
-
-                    using (var reader = await command.ExecuteReaderAsync())
+                    var list = new List<dynamic>();
+                    while (await result.ReadAsync())
                     {
-                        while (await reader.ReadAsync())
+                        var obj = new ExpandoObject() as IDictionary<string, object>;
+                        for (int i = 0; i < result.FieldCount; i++)
                         {
-                            var expandoObject = new ExpandoObject() as IDictionary<string, object>;
-
-                            for (int i = 0; i < reader.FieldCount; i++)
-                            {
-                                expandoObject.Add(reader.GetName(i), reader.GetValue(i));
-                            }
-
-                            result.Add(expandoObject);
+                            obj.Add(result.GetName(i), result.GetValue(i));
                         }
+                        list.Add(obj);
                     }
+                    return list;
                 }
             }
-
-            return result;
         }
 
         // Method to execute stored procedure and return DataTable (alternative)
